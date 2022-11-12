@@ -10,9 +10,8 @@
   "author": "KekOnTheWorld",
   "license": "MIT",
   "devDependencies": {
-    "suv": "..:0.0.1"
-  },
-  "dependencies": {
+    "suv": "file:..",
     "vite": "^3.2.3"
-  }
+  },
+  "type": "module"
 }

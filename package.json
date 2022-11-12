@@ -5,16 +5,28 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
   },
   "keywords": [],
   "author": "KekOnTheWorld",
   "license": "MIT",
-  "dependencies": {
-    "acorn": "^8.8.1"
-  },
   "devDependencies": {
-    "nodemon": "^2.0.20"
+    "acorn": "^8.8.1",
+    "prettier": "^2.7.1",
+    "typescript": "^4.8.4",
+    "vite": "^3.2.3"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./src/exports/index.js"
+    },
+    "./vite": {
+      "import": "./src/exports/vite/index.js"
+    }
+  },
+  "types": "types/index.d.ts",
+  "engines": {
+    "node": ">=16.14"
   }
 }
