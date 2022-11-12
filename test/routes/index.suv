@@ -1,0 +1,6 @@
+<script>
+    let counter = 0;
+</script>
+
+<p>{counter}</p>
+<button onclick="counter++">+</button>

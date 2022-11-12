@@ -1,0 +1,20 @@
+{
+  "name": "suv",
+  "version": "0.0.1",
+  "description": "Tiny sveltekit",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "keywords": [],
+  "author": "KekOnTheWorld",
+  "license": "MIT",
+  "dependencies": {
+    "acorn": "^8.8.1"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.20"
+  }
+}
