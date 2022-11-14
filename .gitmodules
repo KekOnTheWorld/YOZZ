@@ -1,3 +1,9 @@
 [submodule "rem"]
-	path = rem
+	path = external/rem
 	url = https://github.com/chwayne/rem
+[submodule "h11"]
+	path = external/h11
+	url = https://github.com/ducdetronquito/h11
+[submodule "http"]
+	path = external/http
+	url = https://github.com/ducdetronquito/http
