@@ -1,2 +1,2 @@
-node_modules/
-*-lock.*
+zig-cache
+zig-out
