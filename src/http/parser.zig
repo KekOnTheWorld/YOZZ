@@ -1,33 +1,34 @@
 const std = @import("std");
+const http = @import("http.zig");
+
 const Allocator = std.mem.Allocator;
 
-pub const Method = enum(u4) {
-    GET = 0, HEAD = 1, POST = 2, PUT = 3,
-    DELETE = 4, CONNECT = 5, OPTIONS = 6, 
-    TRACE = 7, PATCH = 8
-};
 
 pub const ParseError = error {
-    MethodNotFound, NotImplemented
+    InvalidMethod, InvalidVersion, NotImplemented
 };
 
-pub const ParseState = enum(u4) {
-    METHOD = 0, PATH = 1, VERSION = 2
+pub const ParseState = enum {
+    METHOD, PATH, VERSION, HEADER_NAME, HEADER_VALUE
 };
 
 pub const Stack = struct {
     buf: []u8,
-    len: u32,
-    cap: u32,
+    len: usize,
+    cap: usize,
+    allocator: Allocator,
 
-    pub fn init(allocator: Allocator, cap: u32) !Stack {
-        const buf = try allocator.alloc(u8, cap);
-
+    pub fn init(allocator: Allocator, cap: usize) !Stack {
         return Stack {
             .cap = cap,
-            .buf = buf,
-            .len = 0
+            .buf = try allocator.alloc(u8, cap),
+            .len = 0,
+            .allocator = allocator
         };
+    }
+
+    pub fn deinit(self: *Stack) void {
+        self.allocator.free(self.buf);
     }
 
     pub fn reset(self: *Stack) void {
@@ -39,27 +40,39 @@ pub const Stack = struct {
         self.buf[self.len] = byte;
         self.len += 1;
     }
+
+    pub fn slice(self: *Stack) []u8 {
+        return self.buf[0..self.len];
+    }
 };
 
-method: ?Method,
-path: ?[]u8,
+header: []u8,
+header_len: usize,
 state: ParseState,
 stack: Stack,
+request: http.Request,
 allocator: Allocator,
 
 const Parser = @This();
 
 pub fn init(allocator: Allocator, cap: u32) !Parser {
     return Parser {
-        .method = null,
-        .path = null,
+        .header = try allocator.alloc(u8, cap),
+        .header_len = 0,
         .state = @intToEnum(ParseState, 0),
+        .stack = try Stack.init(allocator, cap),
+        .request = http.Request.init(allocator),
         .allocator = allocator,
-        .stack = try Stack.init(allocator, cap)
     };
 }
 
-pub fn write(self: *Parser, data: []u8) ParseError!void {
+pub fn deinit(self: *Parser) void {
+    self.allocator.free(self.header);
+    self.request.deinit();
+    self.stack.deinit();
+}
+
+pub fn write(self: *Parser, data: []u8) !void {
     for(data) |byte| try self.handle(byte);
 }
 
@@ -68,33 +81,60 @@ pub fn nextState(self: *Parser) void {
     self.stack.reset();
 }
 
-pub fn handle(self: *Parser, byte: u8) ParseError!void {
+pub fn handle(self: *Parser, byte: u8) !void {
     return switch(self.state) {
         ParseState.METHOD => {
-            if(byte == ' ') {
-                self.method = try parseMethod(self.stack.buf);
-                std.log.debug("METHOD: {s} -> {?}", .{self.stack.buf, self.method});
-                self.nextState();
-            } else self.stack.push(byte);
+            if(byte != ' ') return self.append(byte);
+
+            self.request.method = try http.Method.parse(self.stack.slice());
+            self.nextState();
         },
-        else => ParseError.NotImplemented
+        ParseState.PATH => {
+            if(byte != ' ') return self.append(byte);
+
+            self.request.path = try http.parsePath(self.stack.slice());
+            self.nextState();
+        },
+        ParseState.VERSION => {
+            if(byte != '\n') return self.append(byte);
+
+            self.request.version = try http.Version.parse(self.stack.slice());
+            self.nextState();
+        },
+        ParseState.HEADER_NAME => {
+            if(byte != ' ') return self.append(byte);
+           
+            const name = self.stack.slice();
+            if(name.len == 0) unreachable;
+
+            // Trim the last char (:)
+            // Copy into header name buffer
+            self.header_len = name.len - 1;
+            std.mem.copy(u8, self.header, name[0..self.header_len]);
+
+            self.stack.reset();
+            self.state = ParseState.HEADER_VALUE;
+        },
+        ParseState.HEADER_VALUE => {
+            if(byte != '\n') return self.append(byte);
+
+            const value = self.stack.slice();
+            if(value.len == 0) unreachable;
+
+            const name = self.header[0..self.header_len];
+
+            std.log.debug("Header: {s}: {s}", .{name, value});
+
+            // TODO: Find temporary workaround to fix contains context issues
+            // self.request.headers.put(name, value);
+
+            self.stack.reset();
+            self.state = ParseState.HEADER_NAME;
+        }
     };
 }
 
-pub fn parseMethod(method: []u8) ParseError!Method {
-    // Todo: Find better way (that is working too lol)
-    // return switch(method) {
-    //     "GET" => Method.GET,
-    //     "HEAD" => Method.HEAD,
-    //     "POST" => Method.POST,
-    //     "PUT" => Method.PUT,
-    //     "DELETE" => Method.DELETE,
-    //     "CONNECT" => Method.CONNECT,
-    //     "OPTIONS" => Method.OPTIONS,
-    //     "TRACE" => Method.TRACE,
-    //     "PATCH" => Method.PATCH,
-    //     else => ParseError.MethodNotFound
-    // };
-
-    return ParseError.MethodNotFound;
+pub fn append(self: *Parser, byte: u8) void {
+    if(byte == ' ' or byte == '\r' or byte == '\n') return;
+    self.stack.push(byte);
 }
