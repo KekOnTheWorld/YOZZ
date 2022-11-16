@@ -4,8 +4,12 @@ const fs = std.fs;
 
 const Allocator = std.mem.Allocator;
 
-const Parser = @import("parser.zig");
-const ParseError = Parser.ParseError;
+const _parser = @import("parser.zig");
+const ParseError = _parser.ParseError;
+const ParseState = _parser.ParseState;
+const Parser = _parser.Parser;
+
+const util = @import("../util.zig");
 
 // 
 
@@ -27,30 +31,42 @@ pub const Version = enum {
     }
 };
 
-pub const Path = []u8;
+pub const Header = struct {
+    name: []u8, value: []u8,
 
-pub const Headers = std.StringHashMap([]u8);
-
-pub const Request = struct {
-    method: ?Method,
-    version: ?Version,
-    path: ?Path,
-    headers: Headers,
-
-    pub fn init(allocator: Allocator) Request {
-        return Request {
-            .method = null, .version = null,
-            .path = null, .headers = Headers.init(allocator)
+    pub fn parse(name: []u8, value: []u8) ParseError!Header {
+        return Header {
+            .name = name, .value = value
         };
-    }
-    
-    pub fn deinit(self: *Request) void {
-        self.headers.deinit();
     }
 };
 
+pub const Path = []u8;
+
 pub fn parsePath(path: []u8) ParseError!Path {
     return path;
+}
+
+// 
+
+const Context = struct {
+    stream: net.Stream,
+    allocator: Allocator,
+
+    pub fn init(allocator: Allocator, stream: net.Stream) Context {
+        return Context {
+            .stream = stream,
+            .allocator = allocator
+        };
+    }
+
+    pub fn deinit(_: *Context) void {}
+};
+
+pub fn handleOnPath(ctx: *Context, path: Path) !void {
+    if(std.mem.eql(u8, path, "/")) {
+        _ = try ctx.stream.write("Hello world!");
+    }
 }
 
 // 
@@ -62,9 +78,16 @@ pub fn listen(addr: net.Address, allocator: Allocator) !void {
 
     try listener.listen(addr);
 
-    std.log.debug("Listening on {}", .{addr});
+    std.log.debug("Listening on http://{}", .{addr});
+
+    var parser = try Parser(Context).init(allocator, 256);
+    defer parser.deinit();
+
+    parser.on_path = handleOnPath;
 
     while(listener.accept() catch null) |conn| {
+        parser.reset();
+        
         const stream: net.Stream = conn.stream;
 
         // Make sure the stream gets closed properly after request is handeled
@@ -75,16 +98,20 @@ pub fn listen(addr: net.Address, allocator: Allocator) !void {
 
         std.log.debug("Connection from {}", .{conn.address});
 
-        var parser = try Parser.init(allocator, 128);
-        defer parser.deinit();
+        std.log.debug("---------------------", .{});
+
+        var ctx = Context.init(allocator, stream);
+        defer ctx.deinit();
 
         var recv_buf: [64]u8 = undefined;
         while(stream.read(&recv_buf) catch null) |recv_len| {
             if(recv_len == 0) break; // EOF
 
-            std.log.debug("Received: {s}", .{recv_buf[0..recv_len]});
+            try parser.write(recv_buf[0..recv_len], &ctx);
 
-            try parser.write(recv_buf[0..recv_len]);
+            if(parser.state == ParseState.FINISHED) break;
         }
+
+        std.log.debug("---------------------", .{});
     }
 }

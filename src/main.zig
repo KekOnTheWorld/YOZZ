@@ -5,6 +5,7 @@
 
 const std = @import("std");
 const http = @import("http/http.zig");
+const assert = std.debug.assert;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
