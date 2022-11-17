@@ -204,11 +204,6 @@ pub const Header = struct {
     }
 };
 
-pub const Body = struct {
-    buf: []const u8,
-    comptime typ: []const u8 = "text/plain",
-};
-
 pub const Path = []u8;
 
 pub fn parsePath(path: []u8) ParseError!Path {
@@ -220,53 +215,50 @@ pub fn parsePath(path: []u8) ParseError!Path {
 const Context = struct {
     stream: net.Stream,
     allocator: Allocator,
+    routes: *Routes,
 
-    pub fn init(allocator: Allocator, stream: net.Stream) Context {
+    pub fn init(allocator: Allocator, stream: net.Stream, routes: *Routes) Context {
         return Context {
             .stream = stream,
-            .allocator = allocator
+            .allocator = allocator,
+            .routes = routes
         };
     }
 
     pub fn deinit(_: *Context) void {}
 };
 
-
-pub const Route = enum {
-    @"/", @"/teapod",
-
-    pub fn parse(route: []u8) ?Route {
-        return std.meta.stringToEnum(Route, route);
-    }
-};
+pub const Routes = std.StringHashMap(*const fn(stream: net.Stream) anyerror!void);
 
 pub fn handleOnPath(ctx: *Context, path: Path) !void {
-    if(Route.parse(path)) |route| {
-        switch(route) {
-            Route.@"/" => {
-                try respond.writeStatus(Version.@"HTTP/1.2", Status.OK, ctx.stream);
-                try respond.writeBody(Body {
-                    .buf = "Hello World!"
-                }, ctx.stream);
-            },
-            Route.@"/teapod" => {
-                try respond.writeStatus(Version.@"HTTP/1.2", Status.IM_A_TEAPOT, ctx.stream);
-                try respond.writeBody(Body {
-                    .buf = "I'm a Teapod"
-                }, ctx.stream);
-            }
-        }
+    if(ctx.routes.get(path)) |route| {
+        try route(ctx.stream);
     } else {
         try respond.writeStatus(Version.@"HTTP/1.2", Status.NOT_FOUND, ctx.stream);
-        try respond.writeBody(Body {
-            .buf = "Not Found!",
-        }, ctx.stream);
+        try respond.writeBody("Not found!", "text/plain", ctx.stream);
     }
 }
 
 // 
 
+pub fn index(stream: net.Stream) !void {
+    try respond.writeStatus(Version.@"HTTP/1.2", Status.OK, stream);
+    try respond.writeBody("<h1>Simple HTTP Server written in ZIG</h1>", "text/html", stream);
+}
+
+pub fn teapod(stream: net.Stream) !void {
+    try respond.writeStatus(Version.@"HTTP/1.2", Status.IM_A_TEAPOT, stream);
+    try respond.writeBody("<p>Hello World</p>", "text/html", stream);
+}
+
+// 
+
 pub fn listen(addr: net.Address, allocator: Allocator) !void {
+    var routes = Routes.init(allocator);
+
+    try routes.put("/", index);
+    try routes.put("/teapod", teapod);
+
     var listener = net.StreamServer.init(.{});
 
     defer listener.deinit();
@@ -295,7 +287,7 @@ pub fn listen(addr: net.Address, allocator: Allocator) !void {
 
         std.log.debug("---------------------", .{});
 
-        var ctx = Context.init(allocator, stream);
+        var ctx = Context.init(allocator, stream, &routes);
         defer ctx.deinit();
 
         var recv_buf: [64]u8 = undefined;
