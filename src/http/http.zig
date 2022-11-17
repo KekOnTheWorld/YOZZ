@@ -231,12 +231,31 @@ const Context = struct {
     pub fn deinit(_: *Context) void {}
 };
 
+
+pub const Route = enum {
+    @"/", @"/teapod",
+
+    pub fn parse(route: []u8) ?Route {
+        return std.meta.stringToEnum(Route, route);
+    }
+};
+
 pub fn handleOnPath(ctx: *Context, path: Path) !void {
-    if(std.mem.eql(u8, path, "/")) {
-        try respond.writeStatus(Version.@"HTTP/1.2", Status.OK, ctx.stream);
-        try respond.writeBody(Body {
-            .buf = "Hello World!"
-        }, ctx.stream);
+    if(Route.parse(path)) |route| {
+        switch(route) {
+            Route.@"/" => {
+                try respond.writeStatus(Version.@"HTTP/1.2", Status.OK, ctx.stream);
+                try respond.writeBody(Body {
+                    .buf = "Hello World!"
+                }, ctx.stream);
+            },
+            Route.@"/teapod" => {
+                try respond.writeStatus(Version.@"HTTP/1.2", Status.IM_A_TEAPOT, ctx.stream);
+                try respond.writeBody(Body {
+                    .buf = "I'm a Teapod"
+                }, ctx.stream);
+            }
+        }
     } else {
         try respond.writeStatus(Version.@"HTTP/1.2", Status.NOT_FOUND, ctx.stream);
         try respond.writeBody(Body {
