@@ -4,7 +4,10 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
-const http = @import("yozz/http");
+const os = std.os;
+
+const aio = @import("yozz/aio");
+
 const assert = std.debug.assert;
 
 pub fn main() !void {
@@ -12,10 +15,11 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var port: u16 = 4000;
+    const address = try std.net.Address.resolveIp6("::0", 4000);
 
-    while((http.listen(try std.net.Address.resolveIp("0.0.0.0", port), allocator) catch null) == null) {
-        std.log.warn("Port {} in use. Trying another one...", .{port});
-        port += 1;
-    }
+    var sock = try aio.linux.Socket.init(allocator, os.SOCK.STREAM);
+    try sock.bind(address);
+    try sock.listen();
+
+    while(true) {}
 }
