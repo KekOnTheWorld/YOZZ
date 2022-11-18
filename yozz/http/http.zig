@@ -5,13 +5,9 @@ const fs = std.fs;
 const Allocator = std.mem.Allocator;
 
 const _parser = @import("parser.zig");
-const ParseError = _parser.ParseError;
-const ParseState = _parser.ParseState;
-const Parser = _parser.Parser;
-
-const util = @import("../util.zig");
-
-const respond = @import("respond.zig");
+pub const ParseError = _parser.ParseError;
+pub const ParseState = _parser.ParseState;
+pub const Parser = _parser.Parser;
 
 // 
 
@@ -212,81 +208,27 @@ pub fn parsePath(path: []u8) ParseError!Path {
 
 // 
 
-pub const Route = *const fn(ctx: *RouteContext) anyerror!void;
-pub const Routes = std.StringHashMap(Route);
-
-const RouteContext = struct {
+pub const Context = struct {
     stream: net.Stream,
     static: fs.Dir,
     allocator: Allocator,
-};
 
-const Context = struct {
-    routes: *Routes,
-    fallback: Route,
-    route_context: RouteContext,
-
-    pub fn init(allocator: Allocator, stream: net.Stream, routes: *Routes, fallback: Route, static: fs.Dir) Context {
+    pub fn init(allocator: Allocator, stream: net.Stream, static: fs.Dir) Context {
         return Context {
-            .route_context = RouteContext {
-                .stream = stream,  
-                .allocator = allocator,
-                .static = static
-            },
-            .fallback = fallback,
-            .routes = routes
+            .stream = stream,  
+            .allocator = allocator,
+            .static = static,
         };
     }
 
     pub fn deinit(_: *Context) void {}
 };
 
-pub fn handleOnPath(ctx: *Context, path: Path) !void {
-    var rctx = ctx.route_context;
-    if(ctx.routes.get(path)) |route| {
-        try route(&rctx);
-    } else {
-        // TODO: add middleware functions
-
-        // TODO: / => index.html
-        const file = path[1..];
-        rctx.static.access(file, .{}) catch try ctx.fallback(&rctx);
-        try respond.writeStatus(rctx.stream, Version.@"HTTP/1.2", Status.OK);
-        // TODO: detect file type
-        try respond.writeFile(rctx.stream, rctx.static, file, "text/plain");
-    }
-}
-
-// 
-
-pub fn notfound(ctx: *RouteContext) !void {
-    try respond.writeStatus(ctx.stream, Version.@"HTTP/1.2", Status.NOT_FOUND);
-    try respond.writeBody(ctx.stream, "Not found!", "text/plain");
-}
-
-pub fn index(ctx: *RouteContext) !void {
-    try respond.writeStatus(ctx.stream, Version.@"HTTP/1.2", Status.OK);
-    try respond.writeFile(ctx.stream, ctx.static, "index.html", "text/html");
-}
-
-pub fn teapod(ctx: *RouteContext) !void {
-    try respond.writeStatus(ctx.stream, Version.@"HTTP/1.2", Status.IM_A_TEAPOT);
-    try respond.writeBody(ctx.stream, "<p>Hello World</p>", "text/html");
-}
-
 // 
 
 pub fn listen(addr: net.Address, allocator: Allocator) !void {
-    
-    // Initialize the routes
-    var routes = Routes.init(allocator);
-    try routes.put("404", index);
-    try routes.put("/", index);
-    try routes.put("/teapod", teapod);
-
     // Open the static file directory
     const static = try fs.openDirAbsolute(try fs.path.resolve(allocator, &[_][]const u8{"static"}), .{});
-
 
     var listener = net.StreamServer.init(.{});
 
@@ -298,8 +240,6 @@ pub fn listen(addr: net.Address, allocator: Allocator) !void {
 
     var parser = try Parser(Context).init(allocator, 256);
     defer parser.deinit();
-
-    parser.on_path = handleOnPath;
 
     while(listener.accept() catch null) |conn| {
         parser.reset();
@@ -316,7 +256,7 @@ pub fn listen(addr: net.Address, allocator: Allocator) !void {
 
         std.log.debug("---------------------", .{});
 
-        var ctx = Context.init(allocator, stream, &routes, notfound, static);
+        var ctx = Context.init(allocator, stream, static);
         defer ctx.deinit();
 
         var recv_buf: [64]u8 = undefined;

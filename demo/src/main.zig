@@ -1,10 +1,7 @@
-// Copyright (C) 2021 Chadwain Holness
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+// YOZZ EXAMPLE PROJECT
 
 const std = @import("std");
-const http = @import("yozz/http");
+const http = @import("http/http.zig");
 const assert = std.debug.assert;
 
 pub fn main() !void {

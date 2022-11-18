@@ -1,25 +1,6 @@
 const std = @import("std");
-const Pkg = std.build.Pkg;
-const FileSource = std.build.FileSource;
-
-// YOZZ packages
-
-/// Provides a HTTP parser
-pub const yozz_http = Pkg {
-    .name = "yozz/http",
-    .source = FileSource { .path = "yozz/http/http.zig", },
-};
-
-/// Provides asynchronous io
-pub const yozz_aio = Pkg {
-    .name = "yozz/aio",
-    .source = FileSource { .path = "yozz/aio/aio.zig", },
-};
-
-// 
 
 pub fn build(b: *std.build.Builder) void {
-
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -30,12 +11,7 @@ pub fn build(b: *std.build.Builder) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const mode = b.standardReleaseOptions();
 
-    const exe = b.addExecutable("suv", "src/main.zig");
-
-    // PACKAGES
-    exe.addPackage(yozz_http);
-    exe.addPackage(yozz_aio);
-
+    const exe = b.addExecutable("project", "src");
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();
