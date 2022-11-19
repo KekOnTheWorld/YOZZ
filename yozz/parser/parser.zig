@@ -29,9 +29,7 @@ pub const ParseState = enum {
     COMMENT,
 };
 
-pub const BodyType = enum {
-    GROUP, ROUTE, ERROR
-};
+pub const BodyType = enum { GROUP, ROUTE, ERROR };
 pub const Body = struct { single: bool, typ: BodyType };
 pub const BodyStack = Stack(Body);
 
