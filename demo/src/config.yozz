@@ -1,39 +1,39 @@
 LAYOUT layout.zig:handle
 
 # Specific route
-GET /auth {
+ROUTE GET /auth {
     MIDDLEWARE auth.zig:handle
 
     ERROR 401 =>
         RETURN 301 /login 
     
-    ROUTE index.zig:route
+    RENDER index.zig:route
 }
 
 # Route group
-auth {
+GROUP auth {
     MIDDLEWARE auth.zig:handle
 
     ERROR 401 =>
         RETURN 301 /login 
     
-    GET /auth =>
-        ROUTE index.zig:route
+    ROUTE GET /auth =>
+        RENDER index.zig:route
     
-    GET /some =>
-        ROUTE index.zig:route
+    ROUTE GET /some =>
+        RENDER index.zig:route
 }
 
 # Single route
-GET / =>
+ROUTE GET / =>
     ROUTE index.zig:route
 
 # Single route
-GET /abc =>
+ROUTE GET /abc =>
     ROUTE index.zig:route
 
 # Single route
-GET /login => 
+ROUTE GET /login => 
     ROUTE login.zig:route
 
 # Handle Error
