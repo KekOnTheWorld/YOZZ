@@ -4,16 +4,20 @@ const fs = std.fs;
 
 const Allocator = std.mem.Allocator;
 
-// 
+//
 
-pub const HttpParseError = error {
-    InvalidMethod, InvalidVersion, InvalidStatus
-};
+pub const HttpParseError = error{ InvalidMethod, InvalidVersion, InvalidStatus };
 
 pub const Method = enum {
-    GET, HEAD, POST, PUT,
-    DELETE, CONNECT, OPTIONS, 
-    TRACE, PATCH,
+    GET,
+    HEAD,
+    POST,
+    PUT,
+    DELETE,
+    CONNECT,
+    OPTIONS,
+    TRACE,
+    PATCH,
 
     pub fn parse(method: []u8) HttpParseError!Method {
         return std.meta.stringToEnum(Method, method) orelse HttpParseError.InvalidMethod;
@@ -21,16 +25,17 @@ pub const Method = enum {
 };
 
 pub const Version = enum {
-    @"HTTP/1.1", @"HTTP/1.2",
+    @"HTTP/1.1",
+    @"HTTP/1.2",
 
     pub fn parse(version: []u8) HttpParseError!Version {
         return std.meta.stringToEnum(Version, version) orelse HttpParseError.InvalidVersion;
     }
 
     pub fn toString(self: Version) [:0]const u8 {
-        return switch(self) {
+        return switch (self) {
             Version.@"HTTP/1.1" => "HTTP/1.1",
-            Version.@"HTTP/1.2" => "HTTP/1.2"
+            Version.@"HTTP/1.2" => "HTTP/1.2",
         };
     }
 };
@@ -118,7 +123,7 @@ pub const Status = enum(u16) {
     }
 
     pub fn toString(self: Status) [:0]const u8 {
-        return switch(self) {
+        return switch (self) {
             // INFORMATION RESPONSES
             Status.CONTINUE => "100 Continue",
             Status.SWITCHING_PROTOCOLS => "101 Switching Protocols",
@@ -136,7 +141,7 @@ pub const Status = enum(u16) {
             Status.MULTI_STATUS => "207 Multi-Status",
             Status.ALREADY_REPORTED => "208 Already Reported",
             Status.IM_USED => "226 IM Used",
-            
+
             // REDIRECTION MESSAGES
             Status.MULTIPLE_CHOICES => "300 Multiple Choices",
             Status.MOVED_PERMANENTLY => "301 Moved Permanently",
@@ -194,12 +199,11 @@ pub const Status = enum(u16) {
 };
 
 pub const Header = struct {
-    name: []const u8, value: []const u8,
+    name: []const u8,
+    value: []const u8,
 
     pub fn parse(name: []const u8, value: []const u8) HttpParseError!Header {
-        return Header {
-            .name = name, .value = value
-        };
+        return Header{ .name = name, .value = value };
     }
 };
 
@@ -209,15 +213,15 @@ pub fn parsePath(path: []u8) HttpParseError!Path {
     return path;
 }
 
-// 
+//
 
 pub const HTTPContext = struct {
     stream: net.Stream,
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, stream: net.Stream) HTTPContext {
-        return HTTPContext {
-            .stream = stream,  
+        return HTTPContext{
+            .stream = stream,
             .allocator = allocator,
         };
     }
@@ -225,7 +229,7 @@ pub const HTTPContext = struct {
     pub fn deinit(_: *HTTPContext) void {}
 };
 
-// 
+//
 
 pub fn listen(addr: net.Address, allocator: Allocator) !void {
     // Open the static file directory
@@ -240,9 +244,9 @@ pub fn listen(addr: net.Address, allocator: Allocator) !void {
     var parser = try Parser(HTTPContext).init(allocator, 256);
     defer parser.deinit();
 
-    while(listener.accept() catch null) |conn| {
+    while (listener.accept() catch null) |conn| {
         parser.reset();
-        
+
         const stream: net.Stream = conn.stream;
 
         // Make sure the stream gets closed properly after request is handeled
@@ -259,31 +263,27 @@ pub fn listen(addr: net.Address, allocator: Allocator) !void {
         defer ctx.deinit();
 
         var recv_buf: [64]u8 = undefined;
-        while(stream.read(&recv_buf) catch null) |recv_len| {
-            if(recv_len == 0) break; // EOF
+        while (stream.read(&recv_buf) catch null) |recv_len| {
+            if (recv_len == 0) break; // EOF
 
             try parser.write(recv_buf[0..recv_len], &ctx);
 
-            if(parser.state == ParseState.FINISHED) break;
+            if (parser.state == ParseState.FINISHED) break;
         }
 
         std.log.debug("---------------------", .{});
     }
 }
 
-// 
+//
 // HTTP Parser
-// 
+//
 
 const StackBuf = @import("../util/stack.zig").StackBuf;
 
-pub const ParseState = enum {
-    METHOD, PATH, VERSION, HEADER_NAME, HEADER_VALUE, FINISHED
-};
+pub const ParseState = enum { METHOD, PATH, VERSION, HEADER_NAME, HEADER_VALUE, FINISHED };
 
-pub fn Parser(
-    comptime Context: type
-) type {
+pub fn Parser(comptime Context: type) type {
     return struct {
         // Default handlers
         pub fn onMethod(_: *Context, _: Method) anyerror!void {}
@@ -307,11 +307,7 @@ pub fn Parser(
         // Initialize the Parser. This will
         // allocate a new Stack with size of cap
         pub fn init(allocator: Allocator, stack_cap: usize) !Self {
-            return Self {
-                .header = 0,
-                .state = @intToEnum(ParseState, 0),
-                .stack = try StackBuf.init(allocator, stack_cap)
-            };
+            return Self{ .header = 0, .state = @intToEnum(ParseState, 0), .stack = try StackBuf.init(allocator, stack_cap) };
         }
 
         // Deinitialize the Parser. This will deinitialize
@@ -329,14 +325,14 @@ pub fn Parser(
 
         // Handle multiple bytes
         pub fn write(self: *Self, data: []u8, ctx: *Context) !void {
-            for(data) |byte| try self.handle(byte, ctx);
+            for (data) |byte| try self.handle(byte, ctx);
         }
 
         // Handle byte
         pub fn handle(self: *Self, byte: u8, ctx: *Context) !void {
-            return switch(self.state) {
+            return switch (self.state) {
                 ParseState.METHOD => {
-                    if(byte != ' ') return self.append(byte);
+                    if (byte != ' ') return self.append(byte);
 
                     const method = try Method.parse(self.stack.slice());
 
@@ -348,7 +344,7 @@ pub fn Parser(
                     self.state = ParseState.PATH;
                 },
                 ParseState.PATH => {
-                    if(byte != ' ') return self.append(byte);
+                    if (byte != ' ') return self.append(byte);
 
                     const path = try parsePath(self.stack.slice());
 
@@ -360,7 +356,7 @@ pub fn Parser(
                     self.state = ParseState.VERSION;
                 },
                 ParseState.VERSION => {
-                    if(byte != '\n') return self.append(byte);
+                    if (byte != '\n') return self.append(byte);
 
                     const version = try Version.parse(self.stack.slice());
 
@@ -372,7 +368,7 @@ pub fn Parser(
                     self.state = ParseState.HEADER_NAME;
                 },
                 ParseState.HEADER_NAME => {
-                    if(byte == '\n') {
+                    if (byte == '\n') {
                         self.state = ParseState.FINISHED;
 
                         std.log.debug("END OF MESSAGE", .{});
@@ -380,7 +376,7 @@ pub fn Parser(
                         return try self.on_end(ctx);
                     }
 
-                    if(byte != ' ') return self.append(byte);
+                    if (byte != ' ') return self.append(byte);
 
                     // Pop the ':' from the stack
                     self.stack.pop();
@@ -391,27 +387,27 @@ pub fn Parser(
                     self.state = ParseState.HEADER_VALUE;
                 },
                 ParseState.HEADER_VALUE => {
-                    if(byte != '\n') return self.append(byte);
+                    if (byte != '\n') return self.append(byte);
 
                     const name = self.stack.buf[0..self.header];
                     const value = self.stack.buf[self.header..self.stack.len];
 
                     const header = try Header.parse(name, value);
 
-                    std.log.debug("HEADER: {s}: {s}", .{header.name, header.value});
+                    std.log.debug("HEADER: {s}: {s}", .{ header.name, header.value });
 
                     try self.on_header(ctx, header);
 
                     self.stack.reset();
                     self.state = ParseState.HEADER_NAME;
                 },
-                ParseState.FINISHED => {}
+                ParseState.FINISHED => {},
             };
         }
 
         // Append byte to stack
         pub fn append(self: *Self, byte: u8) void {
-            if(byte == '\r' or byte == '\n') return;
+            if (byte == '\r' or byte == '\n') return;
             self.stack.push(byte);
         }
     };

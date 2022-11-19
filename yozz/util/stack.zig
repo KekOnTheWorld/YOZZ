@@ -3,9 +3,7 @@ const mem = std.mem;
 
 pub const StackBuf = Stack(u8);
 
-pub fn Stack(
-    comptime T: type
-) type {
+pub fn Stack(comptime T: type) type {
     return struct {
         const Self = @This();
 
@@ -18,11 +16,7 @@ pub fn Stack(
         /// with cap as its size. If allocation fails, an error
         /// Will be returned.
         pub fn init(allocator: mem.Allocator, cap: usize) !Self {
-            return Self {
-                .cap = cap,
-                .buf = try allocator.alloc(T, cap),
-                .allocator = allocator
-            };
+            return Self{ .cap = cap, .buf = try allocator.alloc(T, cap), .allocator = allocator };
         }
 
         /// Deinitialize the Stack. This will free the buffer.
@@ -39,7 +33,7 @@ pub fn Stack(
         /// Push an item on to the stack and increase the len value.
         /// Might override previous values stored at that position in the buffer.
         pub fn push(self: *Self, item: T) void {
-            if(self.len >= self.cap) unreachable;
+            if (self.len >= self.cap) unreachable;
             self.buf[self.len] = item;
             self.len += 1;
         }
@@ -47,13 +41,12 @@ pub fn Stack(
         /// Pops from the stack by decreasing the len value.
         /// Items are not removed from the buffer.
         pub fn pop(self: *Self) void {
-            if(self.len > 0) self.len -= 1;
+            if (self.len > 0) self.len -= 1;
         }
 
         /// Returns the last element from the stack
         pub fn last(self: *Self) ?T {
-            return if(self.len > 0) self.buf[self.len - 1]
-                else null;
+            return if (self.len > 0) self.buf[self.len - 1] else null;
         }
 
         /// Get a slice of the buffer with the length of self.len.

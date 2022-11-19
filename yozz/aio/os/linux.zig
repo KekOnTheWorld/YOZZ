@@ -1,8 +1,6 @@
 /// TODO: IMPLEMENT
-
 /// Provide asynchronous IO for Linux based
 /// Systems
-
 const std = @import("std");
 const os = std.os;
 const net = std.net;
@@ -43,11 +41,7 @@ pub const Socket = struct {
             &mem.toBytes(@as(c_int, 0)),
         );
 
-        return Self { 
-            .sockfd = sockfd,
-            .allocator = allocator,
-            .ring = try IO_Uring.init(IO_URING_DEFAULT_ENTRIES, 0)
-        };
+        return Self{ .sockfd = sockfd, .allocator = allocator, .ring = try IO_Uring.init(IO_URING_DEFAULT_ENTRIES, 0) };
     }
 
     pub fn bind(self: *Self, addr: net.Address) !void {
@@ -58,7 +52,5 @@ pub const Socket = struct {
         try os.listen(self.sockfd, std.math.maxInt(u31));
     }
 
-    pub fn handle() void {
-
-    }
+    pub fn handle() void {}
 };

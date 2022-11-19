@@ -8,11 +8,12 @@ const logger = std.log.scoped(.YOZZ_APP);
 
 const Context = struct {
     pub fn init() !Context {
-        return Context {};
+        return Context{};
     }
 
     pub fn onComment(self: *Context, comment: []const u8) !void {
-        _ = self; std.log.info("COMMENT: {s}", .{comment});
+        _ = self;
+        std.log.info("COMMENT: {s}", .{comment});
     }
 };
 
@@ -20,7 +21,7 @@ const onComment = Context.onComment;
 
 pub fn prepare(exe: *std.build.LibExeObjStep) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer if(gpa.deinit()) logger.info("kekw", .{});
+    defer if (gpa.deinit()) logger.info("kekw", .{});
     const allocator = gpa.allocator();
 
     logger.info("Preparing to build '{s}'", .{exe.name});
@@ -36,17 +37,15 @@ pub fn prepare(exe: *std.build.LibExeObjStep) !void {
     var parser = try Parser(Context).init(allocator, 128, 4, 4);
     defer parser.deinit();
     var ctx = try Context.init();
-    
+
     parser.on_comment = onComment;
 
-
     var buf: [32]u8 = undefined;
-    while(config.read(&buf) catch null) |bytes| {
+    while (config.read(&buf) catch null) |bytes| {
         const slice = buf[0..bytes];
 
         try parser.write(slice, &ctx);
 
-        if(bytes < buf.len) break;
+        if (bytes < buf.len) break;
     }
-    
 }
