@@ -75,21 +75,21 @@ pub fn Parser(
         const Self = @This();
 
         
-        pub fn onGroupBegin(_: *Context, _: u16, _: []const u8) void {}
-        pub fn onGroupEnd(_: *Context, _: u16) void {}
-        pub fn onRouteBegin(_: *Context, _: http.Method, _: http.Path) void {}
-        pub fn onRouteEnd(_: *Context) void {}
-        pub fn onErrorBegin(_: *Context, _: http.Status) void {}
-        pub fn onErrorEnd(_: *Context) void {}
-        pub fn onLayout(_: *Context, _: Handler) void {}
-        pub fn onMiddleware(_: *Context, _: Handler) void {}
-        pub fn onRender(_: *Context, _: Handler) void {}
-        pub fn onReturn(_: *Context, _: http.Status, _: []const u8) void {}
-        pub fn onComment(_: *Context, _: []const u8) void {}
+        pub fn onGroupBegin(_: *Context, _: u16, _: []const u8) !void {}
+        pub fn onGroupEnd(_: *Context, _: u16, _: ?u16) !void {}
+        pub fn onRouteBegin(_: *Context, _: http.Method, _: http.Path) !void {}
+        pub fn onRouteEnd(_: *Context) !void {}
+        pub fn onErrorBegin(_: *Context, _: http.Status) !void {}
+        pub fn onErrorEnd(_: *Context) !void {}
+        pub fn onLayout(_: *Context, _: Handler) !void {}
+        pub fn onMiddleware(_: *Context, _: Handler) !void {}
+        pub fn onRender(_: *Context, _: Handler) !void {}
+        pub fn onReturn(_: *Context, _: http.Status, _: []const u8) !void {}
+        pub fn onComment(_: *Context, _: []const u8) !void {}
 
         /// onGroupBegin(ctx, gid, name)
         on_group_begin: *const @TypeOf(onGroupBegin) = onGroupBegin,
-        /// onGroupEnd(ctx, gid)
+        /// onGroupEnd(ctx, lastGID, activeGID)
         on_group_end: *const @TypeOf(onGroupEnd) = onGroupEnd,
         /// onRouteBegin(ctx, method, path)
         on_route_begin: *const @TypeOf(onRouteBegin) = onRouteBegin,
@@ -121,7 +121,7 @@ pub fn Parser(
         return_status: http.Status = undefined,
 
         body_stack: BodyStack,
-        body_type: BodyType,
+        body_type: BodyType = undefined,
 
         allocator: mem.Allocator,
         state: ParseState,
@@ -139,16 +139,32 @@ pub fn Parser(
         pub fn deinit(self: *Self) void {
             self.stack.deinit();
             self.group_stack.deinit();
+            self.body_stack.deinit();
         }
 
         pub fn write(self: *Self, buf: []const u8, ctx: *Context) !void {
             for(buf) |byte| try self.handle(byte, ctx);
         }
 
+        /// Pops body from the stack
+        pub fn popBody(self: *Self, body: Body, ctx: *Context) !void {
+            switch(body.typ) {
+                BodyType.ERROR => try self.on_error_end(ctx),
+                BodyType.ROUTE => try self.on_route_end(ctx),
+                BodyType.GROUP => {
+                    const last = self.group_stack.last().?;
+                    self.group_stack.pop();
+                    const now = self.group_stack.last();
+                    try self.on_group_end(ctx, last, now);
+                }
+            }
+            self.body_stack.pop();
+        }
+        
         /// Pops body from the stack if single
-        pub fn popBody(self: *Self) void {
+        pub fn popSingleBody(self: *Self, ctx: *Context) !void {
             if(self.body_stack.last()) |body| {
-                if(body.single) self.body_stack.pop();
+                if(body.single) try self.popBody(body, ctx);
             }
         }
         
@@ -157,19 +173,22 @@ pub fn Parser(
                 ParseState.INSTRUCTION => {
                     if(byte == '}') {
                         if(self.body_stack.last()) |body| {
-                            if(body.single) {
-                                return ParseError.EMPTY_SINGLE_BODY;
-                            } else self.body_stack.pop();
+                            if(body.single) return ParseError.EMPTY_SINGLE_BODY;
+                            try self.popBody(body, ctx);
+                            return self.stack.reset();
                         } else return ParseError.UNEXPECTED_BODY_END;
                     }
 
-                    if(byte != ' ' and byte != '\n')
+                    if(byte != ' ' and byte != '\n' and byte != '#')
                         return self.stack.push(byte);
-                    if(self.stack.len == 0) return;
+                    if(self.stack.len == 0) {
+                        if(byte == '#') self.state = ParseState.COMMENT;
+                        return;
+                    }
 
-                    if(byte == '\n') return ParseState.UNEXPECTED_NEW_LINE;
+                    if(byte == '\n')
+                        return ParseError.UNEXPECTED_NEW_LINE;
 
-                    self.stack.reset();
                     self.state = switch(try Instruction.parse(self.stack.slice())) {
                         Instruction.GROUP => ParseState.GROUP_NAME,
                         Instruction.ROUTE => ParseState.ROUTE_METHOD,
@@ -181,6 +200,7 @@ pub fn Parser(
 
                         Instruction.RETURN => ParseState.RETURN_STATUS
                     };
+                    self.stack.reset();
                 },
                 ParseState.GROUP_NAME => {
                     if(byte != ' ' and byte != '\n')
@@ -191,7 +211,7 @@ pub fn Parser(
                     self.group_stack.push(gid);
                     self.group_id += 1;
 
-                    self.on_group_begin(ctx, gid, self.stack.slice());
+                    try self.on_group_begin(ctx, gid, self.stack.slice());
 
                     self.stack.reset();
 
@@ -203,8 +223,10 @@ pub fn Parser(
                         return self.stack.push(byte);
                     if(self.stack.len == 0) return;
 
-                    if(byte == '\n')
+                    if(byte == '\n') {
+                        std.log.warn("UNEXPECTED NEW LINE: STACK: {s}", .{self.stack.slice()});
                         return ParseError.UNEXPECTED_NEW_LINE;
+                    }
 
                     self.route_method = try http.Method.parse(self.stack.slice());
 
@@ -216,10 +238,9 @@ pub fn Parser(
                         return self.stack.push(byte);
                     if(self.stack.len == 0) return;
 
-                    self.on_route_begin(ctx, self.route_method, try http.parsePath(self.stack.slice()));
+                    try self.on_route_begin(ctx, self.route_method, try http.parsePath(self.stack.slice()));
 
                     self.stack.reset();
-
                     self.body_type = BodyType.ROUTE;
                     self.state = ParseState.BODY;
                 },
@@ -228,49 +249,45 @@ pub fn Parser(
                         return self.stack.push(byte);
                     if(self.stack.len == 0) return;
 
-                    self.on_error_begin(ctx, try http.Status.parse(
-                        try std.fmt.parseInt(self.stack.slice())));
-
-                    self.stack.reset();
+                    try self.on_error_begin(ctx, try http.Status.parse(
+                        try std.fmt.parseInt(u16, self.stack.slice(), 10)));
 
                     self.body_type = BodyType.ERROR;
                     self.state = ParseState.BODY;
+                    self.stack.reset();
                 },
                 ParseState.LAYOUT_HANDLER => {
                     if(byte != '\n')
                         return self.stack.push(byte);
                     if(self.stack.len == 0) return;
 
-                    self.on_layout(ctx, try Handler.parse(self.stack.slice()));
+                    try self.on_layout(ctx, try Handler.parse(self.stack.slice()));
 
-                    self.stack.reset();
                     self.state = ParseState.INSTRUCTION;
-
-                    self.popBody();
+                    try self.popSingleBody(ctx);
+                    self.stack.reset();
                 },
                 ParseState.MIDDLEWARE_HANDLER => {
                     if(byte != '\n')
                         return self.stack.push(byte);
                     if(self.stack.len == 0) return;
 
-                    self.on_middleware(ctx, try Handler.parse(self.stack.slice()));
+                    try self.on_middleware(ctx, try Handler.parse(self.stack.slice()));
 
-                    self.stack.reset();
                     self.state = ParseState.INSTRUCTION;
-
-                    self.popBody();
+                    try self.popSingleBody(ctx);
+                    self.stack.reset();
                 },
                 ParseState.RENDER_HANDLER => {
                     if(byte != '\n')
                         return self.stack.push(byte);
                     if(self.stack.len == 0) return;
 
-                    self.on_render(ctx, try Handler.parse(self.stack.slice()));
+                    try self.on_render(ctx, try Handler.parse(self.stack.slice()));
 
-                    self.stack.reset();
                     self.state = ParseState.INSTRUCTION;
-
-                    self.popBody();
+                    try self.popSingleBody(ctx);
+                    self.stack.reset();
                 },
                 ParseState.RETURN_STATUS => {
                     if(byte != ' ' and byte != '\n')
@@ -281,30 +298,32 @@ pub fn Parser(
                         return ParseError.UNEXPECTED_NEW_LINE;
 
                     self.return_status = try http.Status.parse(
-                        try std.fmt.parseInt(self.stack.slice()));
+                        try std.fmt.parseInt(u16, self.stack.slice(), 10));
 
-                    self.stack.reset();
                     self.state = ParseState.RETURN_BODY;
+                    self.stack.reset();
                 },
                 ParseState.RETURN_BODY => {
                     if(byte != '\n')
                         return self.stack.push(byte);
                     
-                    self.on_return(ctx, self.return_status, self.stack.slice());
+                    try self.on_return(ctx, self.return_status, self.stack.slice());
                 
-                    self.stack.reset();
                     self.state = ParseState.INSTRUCTION;
-
-                    self.popBody();
+                    try self.popSingleBody(ctx);
+                    self.stack.reset();
                 },
                 ParseState.COMMENT => {
-                    if(byte != '\n')
-                        return self.stack.push(byte);
-                    
-                    self.on_comment(ctx, self.stack.slice());
+                    if(byte != '\n') {
+                        if(byte != ' ' or self.stack.len > 0)
+                            self.stack.push(byte);
+                        return;
+                    }
 
-                    self.stack.reset();
+                    try self.on_comment(ctx, self.stack.slice());
+
                     self.state = ParseState.INSTRUCTION;
+                    self.stack.reset();
                 },
                 ParseState.BODY => {
                     if(byte != '\n' and byte != ' ')
@@ -312,9 +331,9 @@ pub fn Parser(
                     
 
                     var single: bool = false;
-                    if(mem.eql(self.stack.slice(), "=>")) {
+                    if(mem.eql(u8, self.stack.slice(), "=>")) {
                         single = true;
-                    } else if(!mem.eql(self.stack.slice(), "{"))
+                    } else if(!mem.eql(u8, self.stack.slice(), "{"))
                         return ParseError.EXPECTED_BODY_START;
 
                     self.body_stack.push(Body {
@@ -322,8 +341,8 @@ pub fn Parser(
                         .typ = self.body_type
                     });
 
-                    self.stack.reset();
                     self.state = ParseState.INSTRUCTION;
+                    self.stack.reset();
                 }
             };
         }

@@ -26,16 +26,16 @@ GROUP auth {
 
 # Single route
 ROUTE GET / =>
-    ROUTE index.zig:route
+    RENDER index.zig:route
 
 # Single route
 ROUTE GET /abc =>
-    ROUTE index.zig:route
+    RENDER index.zig:route
 
 # Single route
 ROUTE GET /login => 
-    ROUTE login.zig:route
+    RENDER login.zig:route
 
 # Handle Error
 ERROR 404 => 
-    ROUTE 404.zig:route
+    RENDER 404.zig:route

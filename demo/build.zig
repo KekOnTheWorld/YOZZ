@@ -15,7 +15,7 @@ pub const yozz = Pkg {
 
 const yozz_app = @import("__yozz__/yozz/app.zig");
 
-pub fn build(b: *std.build.Builder) void {
+pub fn build(b: *std.build.Builder) !void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -28,7 +28,7 @@ pub fn build(b: *std.build.Builder) void {
 
     const exe = b.addExecutable("project", "src/main.zig");
 
-    yozz_app.prepare(exe);
+    try yozz_app.prepare(exe);
 
     exe.addPackage(yozz);
 
