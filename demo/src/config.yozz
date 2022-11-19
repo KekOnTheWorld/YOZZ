@@ -1,5 +1,6 @@
 LAYOUT layout.zig:handle
 
+# Specific route
 GET /auth {
     MIDDLEWARE auth.zig:handle
 
@@ -9,13 +10,32 @@ GET /auth {
     ROUTE index.zig:route
 }
 
+# Route group
+auth {
+    MIDDLEWARE auth.zig:handle
+
+    ERROR 401 =>
+        RETURN 301 /login 
+    
+    GET /auth =>
+        ROUTE index.zig:route
+    
+    GET /some =>
+        ROUTE index.zig:route
+}
+
+# Single route
 GET / =>
     ROUTE index.zig:route
+
+# Single route
 GET /abc =>
     ROUTE index.zig:route
 
+# Single route
 GET /login => 
     ROUTE login.zig:route
 
+# Handle Error
 ERROR 404 => 
     ROUTE 404.zig:route
