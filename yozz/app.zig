@@ -13,7 +13,7 @@ const Context = struct {
 
     pub fn onComment(self: *Context, comment: []const u8) !void {
         _ = self;
-        std.log.info("COMMENT: {s}", .{comment});
+        logger.info("COMMENT: {s}", .{comment});
     }
 };
 
@@ -29,6 +29,8 @@ pub fn prepare(exe: *std.build.LibExeObjStep) !void {
     const src_relative_path = fs.path.dirname(exe.root_src.?.path).?;
     const src_absolute_path = try fs.path.resolve(allocator, &[_][]const u8{src_relative_path});
     defer allocator.free(src_absolute_path);
+
+    logger.info("Using path '{s}'", .{src_absolute_path});
 
     const src_root: fs.Dir = try fs.openDirAbsolute(src_absolute_path, .{});
 
