@@ -4,15 +4,11 @@ const fs = std.fs;
 
 const Allocator = std.mem.Allocator;
 
-const _parser = @import("parser.zig");
-pub const ParseState = _parser.ParseState;
-pub const Parser = _parser.Parser;
+// 
 
 pub const HttpParseError = error {
     InvalidMethod, InvalidVersion, InvalidStatus
 };
-
-// 
 
 pub const Method = enum {
     GET, HEAD, POST, PUT,
@@ -215,18 +211,18 @@ pub fn parsePath(path: []u8) HttpParseError!Path {
 
 // 
 
-pub const Context = struct {
+pub const HTTPContext = struct {
     stream: net.Stream,
     allocator: Allocator,
 
-    pub fn init(allocator: Allocator, stream: net.Stream) Context {
-        return Context {
+    pub fn init(allocator: Allocator, stream: net.Stream) HTTPContext {
+        return HTTPContext {
             .stream = stream,  
             .allocator = allocator,
         };
     }
 
-    pub fn deinit(_: *Context) void {}
+    pub fn deinit(_: *HTTPContext) void {}
 };
 
 // 
@@ -241,7 +237,7 @@ pub fn listen(addr: net.Address, allocator: Allocator) !void {
 
     std.log.debug("Listening on http://{}", .{addr});
 
-    var parser = try Parser(Context).init(allocator, 256);
+    var parser = try Parser(HTTPContext).init(allocator, 256);
     defer parser.deinit();
 
     while(listener.accept() catch null) |conn| {
@@ -259,7 +255,7 @@ pub fn listen(addr: net.Address, allocator: Allocator) !void {
 
         std.log.debug("---------------------", .{});
 
-        var ctx = Context.init(allocator, stream);
+        var ctx = HTTPContext.init(allocator, stream);
         defer ctx.deinit();
 
         var recv_buf: [64]u8 = undefined;
@@ -273,4 +269,150 @@ pub fn listen(addr: net.Address, allocator: Allocator) !void {
 
         std.log.debug("---------------------", .{});
     }
+}
+
+// 
+// HTTP Parser
+// 
+
+const StackBuf = @import("../util/stack.zig").StackBuf;
+
+pub const ParseState = enum {
+    METHOD, PATH, VERSION, HEADER_NAME, HEADER_VALUE, FINISHED
+};
+
+pub fn Parser(
+    comptime Context: type
+) type {
+    return struct {
+        // Default handlers
+        pub fn onMethod(_: *Context, _: Method) anyerror!void {}
+        pub fn onPath(_: *Context, _: Path) anyerror!void {}
+        pub fn onVersion(_: *Context, _: Version) anyerror!void {}
+        pub fn onHeader(_: *Context, _: Header) anyerror!void {}
+        pub fn onEnd(_: *Context) anyerror!void {}
+
+        header: usize,
+        state: ParseState,
+        stack: StackBuf,
+
+        on_method: *const @TypeOf(onMethod) = onMethod,
+        on_path: *const @TypeOf(onPath) = onPath,
+        on_version: *const @TypeOf(onVersion) = onVersion,
+        on_header: *const @TypeOf(onHeader) = onHeader,
+        on_end: *const @TypeOf(onEnd) = onEnd,
+
+        const Self = @This();
+
+        // Initialize the Parser. This will
+        // allocate a new Stack with size of cap
+        pub fn init(allocator: Allocator, stack_cap: usize) !Self {
+            return Self {
+                .header = 0,
+                .state = @intToEnum(ParseState, 0),
+                .stack = try StackBuf.init(allocator, stack_cap)
+            };
+        }
+
+        // Deinitialize the Parser. This will deinitialize
+        // its stack and its request object.
+        pub fn deinit(self: *Self) void {
+            self.stack.deinit();
+        }
+
+        // Reset the Parser to its initial State
+        pub fn reset(self: *Self) void {
+            self.state = @intToEnum(ParseState, 0);
+            self.stack.reset();
+            self.header = 0;
+        }
+
+        // Handle multiple bytes
+        pub fn write(self: *Self, data: []u8, ctx: *Context) !void {
+            for(data) |byte| try self.handle(byte, ctx);
+        }
+
+        // Handle byte
+        pub fn handle(self: *Self, byte: u8, ctx: *Context) !void {
+            return switch(self.state) {
+                ParseState.METHOD => {
+                    if(byte != ' ') return self.append(byte);
+
+                    const method = try Method.parse(self.stack.slice());
+
+                    std.log.debug("METHOD: {}", .{method});
+
+                    try self.on_method(ctx, method);
+
+                    self.stack.reset();
+                    self.state = ParseState.PATH;
+                },
+                ParseState.PATH => {
+                    if(byte != ' ') return self.append(byte);
+
+                    const path = try parsePath(self.stack.slice());
+
+                    std.log.debug("PATH: {s}", .{path});
+
+                    try self.on_path(ctx, path);
+
+                    self.stack.reset();
+                    self.state = ParseState.VERSION;
+                },
+                ParseState.VERSION => {
+                    if(byte != '\n') return self.append(byte);
+
+                    const version = try Version.parse(self.stack.slice());
+
+                    std.log.debug("VERSION: {}", .{version});
+
+                    try self.on_version(ctx, version);
+
+                    self.stack.reset();
+                    self.state = ParseState.HEADER_NAME;
+                },
+                ParseState.HEADER_NAME => {
+                    if(byte == '\n') {
+                        self.state = ParseState.FINISHED;
+
+                        std.log.debug("END OF MESSAGE", .{});
+
+                        return try self.on_end(ctx);
+                    }
+
+                    if(byte != ' ') return self.append(byte);
+
+                    // Pop the ':' from the stack
+                    self.stack.pop();
+
+                    // Store the split position between header name and value
+                    self.header = self.stack.len;
+
+                    self.state = ParseState.HEADER_VALUE;
+                },
+                ParseState.HEADER_VALUE => {
+                    if(byte != '\n') return self.append(byte);
+
+                    const name = self.stack.buf[0..self.header];
+                    const value = self.stack.buf[self.header..self.stack.len];
+
+                    const header = try Header.parse(name, value);
+
+                    std.log.debug("HEADER: {s}: {s}", .{header.name, header.value});
+
+                    try self.on_header(ctx, header);
+
+                    self.stack.reset();
+                    self.state = ParseState.HEADER_NAME;
+                },
+                ParseState.FINISHED => {}
+            };
+        }
+
+        // Append byte to stack
+        pub fn append(self: *Self, byte: u8) void {
+            if(byte == '\r' or byte == '\n') return;
+            self.stack.push(byte);
+        }
+    };
 }

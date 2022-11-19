@@ -38,6 +38,7 @@ pub const BodyStack = Stack(Body);
 pub const ParseError = error {
     INVALID_INSTRUCTION, 
     UNEXPECTED_NEW_LINE,
+    UNEXPECTED_TAB,
     INVALID_HANDLER,
     EXPECTED_BODY_START,
     UNEXPECTED_BODY_END,
@@ -179,7 +180,7 @@ pub fn Parser(
                         } else return ParseError.UNEXPECTED_BODY_END;
                     }
 
-                    if(byte != ' ' and byte != '\n' and byte != '#')
+                    if(byte != ' ' and byte != '\n' and byte != '#' and byte != '\t')
                         return self.stack.push(byte);
                     if(self.stack.len == 0) {
                         if(byte == '#') self.state = ParseState.COMMENT;
@@ -188,6 +189,8 @@ pub fn Parser(
 
                     if(byte == '\n')
                         return ParseError.UNEXPECTED_NEW_LINE;
+                    if(byte == '\t')
+                        return ParseError.UNEXPECTED_TAB;
 
                     self.state = switch(try Instruction.parse(self.stack.slice())) {
                         Instruction.GROUP => ParseState.GROUP_NAME,
@@ -203,7 +206,7 @@ pub fn Parser(
                     self.stack.reset();
                 },
                 ParseState.GROUP_NAME => {
-                    if(byte != ' ' and byte != '\n')
+                    if(byte != ' ' and byte != '\n' and byte != '\t')
                         return self.stack.push(byte);
                     if(self.stack.len == 0) return;
 
@@ -219,22 +222,22 @@ pub fn Parser(
                     self.state = ParseState.BODY;
                 },
                 ParseState.ROUTE_METHOD => {
-                    if(byte != ' ' and byte != '\n')
+                    if(byte != ' ' and byte != '\n' and byte != '\t')
                         return self.stack.push(byte);
                     if(self.stack.len == 0) return;
 
-                    if(byte == '\n') {
-                        std.log.warn("UNEXPECTED NEW LINE: STACK: {s}", .{self.stack.slice()});
+                    if(byte == '\n')
                         return ParseError.UNEXPECTED_NEW_LINE;
-                    }
-
+                    if(byte == '\t')
+                        return ParseError.UNEXPECTED_TAB;
+                    
                     self.route_method = try http.Method.parse(self.stack.slice());
 
                     self.stack.reset();
                     self.state = ParseState.ROUTE_URL;
                 },
                 ParseState.ROUTE_URL => {
-                    if(byte != ' ' and byte != '\n')
+                    if(byte != ' ' and byte != '\n' and byte != '\t')
                         return self.stack.push(byte);
                     if(self.stack.len == 0) return;
 
@@ -245,7 +248,7 @@ pub fn Parser(
                     self.state = ParseState.BODY;
                 },
                 ParseState.ERROR_STATUS => {
-                    if(byte != ' ' and byte != '\n')
+                    if(byte != ' ' and byte != '\n' and byte != '\t')
                         return self.stack.push(byte);
                     if(self.stack.len == 0) return;
 
@@ -290,12 +293,14 @@ pub fn Parser(
                     self.stack.reset();
                 },
                 ParseState.RETURN_STATUS => {
-                    if(byte != ' ' and byte != '\n')
+                    if(byte != ' ' and byte != '\n' and byte != '\t')
                         return self.stack.push(byte);
                     if(self.stack.len == 0) return;
 
                     if(byte == '\n')
                         return ParseError.UNEXPECTED_NEW_LINE;
+                    if(byte == '\t')
+                        return ParseError.UNEXPECTED_TAB;
 
                     self.return_status = try http.Status.parse(
                         try std.fmt.parseInt(u16, self.stack.slice(), 10));
@@ -326,7 +331,7 @@ pub fn Parser(
                     self.stack.reset();
                 },
                 ParseState.BODY => {
-                    if(byte != '\n' and byte != ' ')
+                    if(byte != '\n' and byte != ' ' and byte != '\t')
                         return self.stack.push(byte);
                     
 
