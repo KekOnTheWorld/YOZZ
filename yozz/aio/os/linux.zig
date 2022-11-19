@@ -1,3 +1,5 @@
+/// TODO: IMPLEMENT
+
 /// Provide asynchronous IO for Linux based
 /// Systems
 
@@ -49,16 +51,11 @@ pub const Socket = struct {
     }
 
     pub fn bind(self: *Self, addr: net.Address) !void {
-        self.address = addr;
         try os.bind(self.sockfd, &addr.any, @sizeOf(os.sockaddr.in6));
     }
 
     pub fn listen(self: Self) !void {
         try os.listen(self.sockfd, std.math.maxInt(u31));
-    }
-
-    pub fn accept(self: *Self) !void {
-        // TODO:
     }
 
     pub fn handle() void {

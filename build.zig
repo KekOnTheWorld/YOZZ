@@ -4,16 +4,10 @@ const FileSource = std.build.FileSource;
 
 // YOZZ packages
 
-/// Provides a HTTP parser
-pub const yozz_http = Pkg {
-    .name = "yozz/http",
-    .source = FileSource { .path = "yozz/http/http.zig", },
-};
-
-/// Provides asynchronous io
-pub const yozz_aio = Pkg {
-    .name = "yozz/aio",
-    .source = FileSource { .path = "yozz/aio/aio.zig", },
+/// Provides the YOZZ modules
+pub const yozz = Pkg {
+    .name = "yozz",
+    .source = FileSource { .path = "yozz/yozz.zig", },
 };
 
 // 
@@ -33,8 +27,7 @@ pub fn build(b: *std.build.Builder) void {
     const exe = b.addExecutable("suv", "src/main.zig");
 
     // PACKAGES
-    exe.addPackage(yozz_http);
-    exe.addPackage(yozz_aio);
+    exe.addPackage(yozz);
 
     exe.setTarget(target);
     exe.setBuildMode(mode);

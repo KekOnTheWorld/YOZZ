@@ -1,5 +1,20 @@
 const std = @import("std");
 
+const Pkg = std.build.Pkg;
+const FileSource = std.build.FileSource;
+
+// TODO: automate this when official zig pm releases
+
+/// Provides the YOZZ modules
+pub const yozz = Pkg {
+    .name = "yozz",
+    .source = FileSource { .path = "__yozz__/yozz/yozz.zig", },
+};
+
+// 
+
+const yozz_app = @import("__yozz__/yozz/app.zig");
+
 pub fn build(b: *std.build.Builder) void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
@@ -11,7 +26,12 @@ pub fn build(b: *std.build.Builder) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const mode = b.standardReleaseOptions();
 
-    const exe = b.addExecutable("project", "src");
+    const exe = b.addExecutable("project", "src/main.zig");
+
+    yozz_app.prepare(exe);
+
+    exe.addPackage(yozz);
+
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();

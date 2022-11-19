@@ -1,3 +1,3 @@
 # yozz
 
-The fullstack ZIG framework.
+The fullstack ZIG framework. Currently only linux is supported!

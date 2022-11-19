@@ -5,9 +5,12 @@ const fs = std.fs;
 const Allocator = std.mem.Allocator;
 
 const _parser = @import("parser.zig");
-pub const ParseError = _parser.ParseError;
 pub const ParseState = _parser.ParseState;
 pub const Parser = _parser.Parser;
+
+pub const HttpParseError = error {
+    InvalidMethod, InvalidVersion, InvalidStatus
+};
 
 // 
 
@@ -16,16 +19,16 @@ pub const Method = enum {
     DELETE, CONNECT, OPTIONS, 
     TRACE, PATCH,
 
-    pub fn parse(method: []u8) ParseError!Method {
-        return std.meta.stringToEnum(Method, method) orelse ParseError.InvalidMethod;
+    pub fn parse(method: []u8) HttpParseError!Method {
+        return std.meta.stringToEnum(Method, method) orelse HttpParseError.InvalidMethod;
     }
 };
 
 pub const Version = enum {
     @"HTTP/1.1", @"HTTP/1.2",
 
-    pub fn parse(version: []u8) ParseError!Version {
-        return std.meta.stringToEnum(Version, version) orelse ParseError.InvalidVersion;
+    pub fn parse(version: []u8) HttpParseError!Version {
+        return std.meta.stringToEnum(Version, version) orelse HttpParseError.InvalidVersion;
     }
 
     pub fn toString(self: Version) [:0]const u8 {
@@ -114,6 +117,10 @@ pub const Status = enum(u16) {
     NOT_EXTENDED = 510,
     NETWORK_AUTHENTICATION_REQUIRED = 511,
 
+    pub fn parse(code: u16) HttpParseError!Status {
+        return std.meta.intToEnum(Status, code) catch HttpParseError.InvalidStatus;
+    }
+
     pub fn toString(self: Status) [:0]const u8 {
         return switch(self) {
             // INFORMATION RESPONSES
@@ -193,7 +200,7 @@ pub const Status = enum(u16) {
 pub const Header = struct {
     name: []const u8, value: []const u8,
 
-    pub fn parse(name: []const u8, value: []const u8) ParseError!Header {
+    pub fn parse(name: []const u8, value: []const u8) HttpParseError!Header {
         return Header {
             .name = name, .value = value
         };
@@ -202,7 +209,7 @@ pub const Header = struct {
 
 pub const Path = []u8;
 
-pub fn parsePath(path: []u8) ParseError!Path {
+pub fn parsePath(path: []u8) HttpParseError!Path {
     return path;
 }
 
@@ -210,14 +217,12 @@ pub fn parsePath(path: []u8) ParseError!Path {
 
 pub const Context = struct {
     stream: net.Stream,
-    static: fs.Dir,
     allocator: Allocator,
 
-    pub fn init(allocator: Allocator, stream: net.Stream, static: fs.Dir) Context {
+    pub fn init(allocator: Allocator, stream: net.Stream) Context {
         return Context {
             .stream = stream,  
             .allocator = allocator,
-            .static = static,
         };
     }
 
@@ -228,8 +233,6 @@ pub const Context = struct {
 
 pub fn listen(addr: net.Address, allocator: Allocator) !void {
     // Open the static file directory
-    const static = try fs.openDirAbsolute(try fs.path.resolve(allocator, &[_][]const u8{"static"}), .{});
-
     var listener = net.StreamServer.init(.{});
 
     defer listener.deinit();
@@ -256,7 +259,7 @@ pub fn listen(addr: net.Address, allocator: Allocator) !void {
 
         std.log.debug("---------------------", .{});
 
-        var ctx = Context.init(allocator, stream, static);
+        var ctx = Context.init(allocator, stream);
         defer ctx.deinit();
 
         var recv_buf: [64]u8 = undefined;

@@ -1,7 +1,7 @@
 // YOZZ EXAMPLE PROJECT
 
 const std = @import("std");
-const http = @import("http/http.zig");
+const http = @import("yozz").http;
 const assert = std.debug.assert;
 
 pub fn main() !void {

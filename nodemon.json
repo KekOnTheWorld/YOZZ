@@ -1,0 +1,5 @@
+{
+    "watch": ["yozz", "demo/src/", "demo/build.zig"],
+    "ext": ".zig",
+    "exec": "cd demo; ./dep.sh; zig build run"
+}
