@@ -5,7 +5,9 @@ const stack = @import("../util/stack.zig");
 const StackBuf = stack.StackBuf;
 const Stack = stack.Stack;
 
-const http = @import("../http/http.zig");
+const yozz = @import("../yozz.zig");
+const http = yozz.http;
+const util = yozz.util;
 
 pub const ParseState = enum {
     INSTRUCTION,
@@ -49,15 +51,6 @@ pub const Instruction = enum {
     }
 };
 
-pub const Handler = struct {
-    buf: []const u8,
-
-    pub fn parse(buf: []const u8) ParseError!Handler {
-        // TODO: correctly parse header
-        return Handler{ .buf = buf };
-    }
-};
-
 pub const GroupStack = Stack(u16);
 
 pub fn Parser(comptime Context: type) type {
@@ -66,17 +59,18 @@ pub fn Parser(comptime Context: type) type {
 
         const Self = @This();
 
-        pub fn onGroupBegin(_: *Context, _: u16, _: []const u8) !void {}
-        pub fn onGroupEnd(_: *Context, _: u16, _: ?u16) !void {}
-        pub fn onRouteBegin(_: *Context, _: http.Method, _: http.Path) !void {}
-        pub fn onRouteEnd(_: *Context) !void {}
-        pub fn onErrorBegin(_: *Context, _: http.Status) !void {}
-        pub fn onErrorEnd(_: *Context) !void {}
-        pub fn onLayout(_: *Context, _: Handler) !void {}
-        pub fn onMiddleware(_: *Context, _: Handler) !void {}
-        pub fn onRender(_: *Context, _: Handler) !void {}
-        pub fn onReturn(_: *Context, _: http.Status, _: []const u8) !void {}
-        pub fn onComment(_: *Context, _: []const u8) !void {}
+        pub fn onGroupBegin(_: *Context, _: u16, _: []const u8) anyerror!void {}
+        pub fn onGroupEnd(_: *Context, _: u16, _: ?u16) anyerror!void {}
+        pub fn onRouteBegin(_: *Context, _: http.Method, _: http.Path) anyerror!void {}
+        pub fn onRouteEnd(_: *Context) anyerror!void {}
+        pub fn onErrorBegin(_: *Context, _: http.Status) anyerror!void {}
+        pub fn onErrorEnd(_: *Context) anyerror!void {}
+        // TODO: Parse Handler correctly
+        pub fn onLayout(_: *Context, _: []const u8) anyerror!void {}
+        pub fn onMiddleware(_: *Context, _: []const u8) anyerror!void {}
+        pub fn onRender(_: *Context, _: []const u8) anyerror!void {}
+        pub fn onReturn(_: *Context, _: http.Status, _: []const u8) anyerror!void {}
+        pub fn onComment(_: *Context, _: []const u8) anyerror!void {}
 
         /// onGroupBegin(ctx, gid, name)
         on_group_begin: *const @TypeOf(onGroupBegin) = onGroupBegin,
@@ -247,7 +241,7 @@ pub fn Parser(comptime Context: type) type {
                         return self.stack.push(byte);
                     if (self.stack.len == 0) return;
 
-                    try self.on_layout(ctx, try Handler.parse(self.stack.slice()));
+                    try self.on_layout(ctx, self.stack.slice());
 
                     self.state = ParseState.INSTRUCTION;
                     try self.popSingleBody(ctx);
@@ -258,7 +252,7 @@ pub fn Parser(comptime Context: type) type {
                         return self.stack.push(byte);
                     if (self.stack.len == 0) return;
 
-                    try self.on_middleware(ctx, try Handler.parse(self.stack.slice()));
+                    try self.on_middleware(ctx, self.stack.slice());
 
                     self.state = ParseState.INSTRUCTION;
                     try self.popSingleBody(ctx);
@@ -269,7 +263,7 @@ pub fn Parser(comptime Context: type) type {
                         return self.stack.push(byte);
                     if (self.stack.len == 0) return;
 
-                    try self.on_render(ctx, try Handler.parse(self.stack.slice()));
+                    try self.on_render(ctx, self.stack.slice());
 
                     self.state = ParseState.INSTRUCTION;
                     try self.popSingleBody(ctx);

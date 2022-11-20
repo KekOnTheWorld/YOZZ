@@ -6,7 +6,7 @@
 const std = @import("std");
 const os = std.os;
 
-const aio = @import("yozz/aio");
+const aio = @import("yozz").aio;
 
 const assert = std.debug.assert;
 

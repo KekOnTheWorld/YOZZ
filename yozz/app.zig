@@ -1,23 +1,11 @@
 const std = @import("std");
 const fs = std.fs;
 
-const _parser = @import("parser/parser.zig");
-const Parser = _parser.Parser;
+const http = @import("http/http.zig");
+
+const codegen = @import("codegen.zig");
 
 const logger = std.log.scoped(.YOZZ_APP);
-
-const Context = struct {
-    pub fn init() !Context {
-        return Context{};
-    }
-
-    pub fn onComment(self: *Context, comment: []const u8) !void {
-        _ = self;
-        logger.info("COMMENT: {s}", .{comment});
-    }
-};
-
-const onComment = Context.onComment;
 
 pub fn prepare(exe: *std.build.LibExeObjStep) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -26,28 +14,16 @@ pub fn prepare(exe: *std.build.LibExeObjStep) !void {
 
     logger.info("Preparing to build '{s}'", .{exe.name});
 
-    const src_relative_path = fs.path.dirname(exe.root_src.?.path).?;
-    const src_absolute_path = try fs.path.resolve(allocator, &[_][]const u8{src_relative_path});
-    defer allocator.free(src_absolute_path);
+    // TODO: pass as argument
+    const src_path = fs.path.dirname(exe.root_src.?.path).?;
+    logger.info("Using source directory '{s}'", .{src_path});
+    const src: fs.Dir = try fs.cwd().openDir(src_path, .{});
 
-    logger.info("Using path '{s}'", .{src_absolute_path});
+    // TODO: pass as argument
+    const dest_path = "__yozz__/generated";
+    try fs.cwd().makePath(dest_path);
+    logger.info("Using destination directory '{s}'", .{dest_path});
+    const dest: fs.Dir = try fs.cwd().openDir(dest_path, .{});
 
-    const src_root: fs.Dir = try fs.openDirAbsolute(src_absolute_path, .{});
-
-    const config: fs.File = try src_root.openFile("config.yozz", .{});
-
-    var parser = try Parser(Context).init(allocator, 128, 4, 4);
-    defer parser.deinit();
-    var ctx = try Context.init();
-
-    parser.on_comment = onComment;
-
-    var buf: [32]u8 = undefined;
-    while (config.read(&buf) catch null) |bytes| {
-        const slice = buf[0..bytes];
-
-        try parser.write(slice, &ctx);
-
-        if (bytes < buf.len) break;
-    }
+    try codegen.load(src, dest, allocator);   
 }

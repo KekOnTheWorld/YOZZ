@@ -232,7 +232,6 @@ pub const HTTPContext = struct {
 //
 
 pub fn listen(addr: net.Address, allocator: Allocator) !void {
-    // Open the static file directory
     var listener = net.StreamServer.init(.{});
 
     defer listener.deinit();
