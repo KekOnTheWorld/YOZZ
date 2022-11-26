@@ -1,0 +1,25 @@
+{
+  "name": "yozz-vscode",
+  "displayName": "YOZZ",
+  "description": "YOZZ language support for VSCode",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.73.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "yozz",
+      "aliases": ["YOZZ", "yozz"],
+      "extensions": [".yozz"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "yozz",
+      "scopeName": "config.yozz",
+      "path": "./syntaxes/yozz.tmLanguage.json"
+    }]
+  }
+}
