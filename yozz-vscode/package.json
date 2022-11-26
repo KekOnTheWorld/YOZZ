@@ -4,7 +4,7 @@
   "description": "YOZZ language support for VSCode",
   "publisher": "yozz",
   "license": "MIT",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "homepage": "https://kotw.dev/yozz",
   "repository": {
     "type": "git",
@@ -20,9 +20,6 @@
   "contributes": {
     "languages": [{
       "id": "yozz",
-      "icon": {
-
-      },
       "aliases": ["YOZZ", "yozz"],
       "extensions": [".yozz"],
       "filenames": [".yozz"],
