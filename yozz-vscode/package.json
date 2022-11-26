@@ -2,13 +2,14 @@
   "name": "yozz-vscode",
   "displayName": "YOZZ",
   "description": "YOZZ language support for VSCode",
+  "license": "MIT",
   "version": "0.0.1",
   "homepage": "https://kotw.dev/yozz",
   "repository": {
     "type": "git",
     "url": "https://github.com/KekOnTheWorld/YOZZ.git"
   },
-  "icon": "../logo/logo.png",
+  "icon": "icon/icon.png",
   "engines": {
     "vscode": "^1.73.0"
   },
@@ -18,6 +19,9 @@
   "contributes": {
     "languages": [{
       "id": "yozz",
+      "icon": {
+
+      },
       "aliases": ["YOZZ", "yozz"],
       "extensions": [".yozz"],
       "filenames": [".yozz"],
