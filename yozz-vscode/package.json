@@ -2,6 +2,7 @@
   "name": "yozz-vscode",
   "displayName": "YOZZ",
   "description": "YOZZ language support for VSCode",
+  "publisher": "yozz",
   "license": "MIT",
   "version": "0.0.1",
   "homepage": "https://kotw.dev/yozz",
