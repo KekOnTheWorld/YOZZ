@@ -3,29 +3,102 @@
 	"name": "YOZZ",
 	"patterns": [
 		{
-			"include": "#keywords"
+			"include": "#comment"
 		},
 		{
-			"include": "#strings"
+			"include": "#instruction"
 		}
 	],
 	"repository": {
-		"keywords": {
-			"patterns": [{
-				"name": "keyword.control.yozz",
-				"match": "\\b(if|while|for|return)\\b"
-			}]
+		"comment": {
+			"name": "comment.line.yozz",
+			"begin": "#",
+			"end": "\n"
 		},
-		"strings": {
-			"name": "string.quoted.double.yozz",
-			"begin": "\"",
-			"end": "\"",
+		"instruction": {
 			"patterns": [
 				{
-					"name": "constant.character.escape.yozz",
-					"match": "\\\\."
+					"include": "#instruction-body"
+				},
+				{
+					"include": "#instruction-handler"
+				},
+				{
+					"include": "#instruction-return"
 				}
 			]
+		},
+		"instruction-handler": {
+			"begin": "(RENDER|MIDDLEWARE|LAYOUT)\\b",
+			"beginCaptures": {
+				"0": {
+					"name": "keyword.yozz.instruction"
+				}
+			},
+			"patterns": [
+				{
+					"include": "#handler"
+				}
+			],
+			"end": "\n"
+		},
+		"instruction-body": {
+			"begin": "(ROUTE|GROUP|ERROR)\\b",
+			"beginCaptures": {
+				"0": {
+					"name": "keyword.yozz.instruction"
+				}
+			},
+			"patterns": [
+				{
+					"include": "#method"
+				},
+				{
+					"include": "#status"
+				}
+			],
+			"end": "(=>|{)",
+			"endCaptures": {
+				"0": {
+					"name": "keyword.control.yozz.body.start"
+				}
+			}
+		},
+		"instruction-return": {
+			"begin": "RETURN\\b",
+			"beginCaptures": {
+				"0": {
+					"name": "keyword.yozz.instruction"
+				}
+			},
+			"patterns": [
+				{
+					"include": "#status"
+				}
+			],
+			"end": "\n"
+		},
+		"method": {
+			"name": "entity.name.selector.yozz.method",
+			"match": "\\b(GET|HEAD|POST|PUT|DELETE|CONNECT|OPTIONS|TRACE|PATCH)\\b"
+		},
+		"status": {
+			"name": "constant.numeric.yozz.status",
+			"match": "\\b[0-9]+\\b"
+		},
+		"handler": {
+			"match": "([a-zA-Z0-9_]+\\.zig)(:)([a-zA-Z0-9_]+)",
+			"captures": {
+				"1": {
+					"name": "entity.name.selector.yozz.file"
+				},
+				"2": {
+					"name": "keyword.operator.yozz.separator"
+				},
+				"3": {
+					"name": "entity.name.function.yozz.handler"
+				}
+			}
 		}
 	},
 	"scopeName": "text.yozz"

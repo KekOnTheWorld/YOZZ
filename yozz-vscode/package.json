@@ -3,6 +3,12 @@
   "displayName": "YOZZ",
   "description": "YOZZ language support for VSCode",
   "version": "0.0.1",
+  "homepage": "https://kotw.dev/yozz",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KekOnTheWorld/YOZZ.git"
+  },
+  "icon": "../logo/logo.png",
   "engines": {
     "vscode": "^1.73.0"
   },
@@ -14,11 +20,13 @@
       "id": "yozz",
       "aliases": ["YOZZ", "yozz"],
       "extensions": [".yozz"],
+      "filenames": [".yozz"],
+      "mimetypes": ["application/yozz"],
       "configuration": "./language-configuration.json"
     }],
     "grammars": [{
       "language": "yozz",
-      "scopeName": "config.yozz",
+      "scopeName": "text.yozz",
       "path": "./syntaxes/yozz.tmLanguage.json"
     }]
   }
